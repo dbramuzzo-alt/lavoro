@@ -7,7 +7,7 @@ st.set_page_config(page_title="Work Planner", layout="wide", page_icon="🚚")
 
 # --- CONNESSIONE A GOOGLE SHEETS ---
 # Incolla qui l'URL del tuo foglio Google
-URL_FOGLIO = "1M48xFONAr45TXsWJ5QwmLOYhKPARcqg5hPWQejDOEV0/edit?usp=drivesdk"
+URL_FOGLIO = "https://docs.google.com/spreadsheets/d/1M48xFONAr45TXsWJ5QwmLOYhKPARcqg5hPWQejDOEV0/edit?usp=drivesdk"
 
 try:
     conn = st.connection("gsheets", type=GSheetsConnection)
