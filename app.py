@@ -1,43 +1,56 @@
 import streamlit as st
+from streamlit_gsheets import GSheetsConnection
 import pandas as pd
 
-st.title("💼 Gestione Lavoro: Rubrica & Itinerari")
+st.set_page_config(page_title="Gestione Itinerari", layout="wide")
 
-# Usiamo i tab per separare Rubrica e Itinerario
-tab1, tab2 = st.tabs(["📇 Rubrica Clienti", "📅 Itinerario del Giorno"])
+# --- CONNESSIONE A GOOGLE SHEETS ---
+# Sostituisci questo URL con quello del tuo foglio (assicurati che sia 'Editor')
+URL_FOGLIO = "https://docs.google.com/spreadsheets/d/1M48xFONAr45TXsWJ5QwmLOYhKPARcqg5hPWQejDOEV0/edit?usp=drivesdk"
 
-# --- TAB 1: RUBRICA CLIENTI ---
+conn = st.connection("gsheets", type=GSheetsConnection)
+
+# Funzione per leggere i dati
+def leggi_rubrica():
+    return conn.read(spreadsheet=URL_FOGLIO, usecols=[0, 1])
+
+# Caricamento dati iniziale
+df_rubrica = leggi_rubrica()
+
+st.title("🚚 Organizzatore Lavoro con Google Sheets")
+
+tab1, tab2 = st.tabs(["📇 Rubrica Clienti", "📅 Pianifica Itinerario"])
+
 with tab1:
-    st.header("Aggiungi un nuovo cliente")
-    if 'rubrica' not in st.session_state:
-        st.session_state.rubrica = pd.DataFrame(columns=["Nome", "Indirizzo"])
-
+    st.header("Gestione Anagrafica")
+    
+    # Form per aggiungere nuovi clienti
     with st.form("nuovo_cliente"):
-        nome_c = st.text_input("Nome Azienda / Cliente")
-        indirizzo_c = st.text_input("Indirizzo Completo")
-        submit_c = st.form_submit_button("Salva in Rubrica")
+        nome = st.text_input("Nome Cliente/Azienda")
+        indirizzo = st.text_input("Indirizzo Completo")
+        submit = st.form_submit_button("Salva nel Cloud")
         
-        if submit_c and nome_c:
-            nuovo_dato = pd.DataFrame([{"Nome": nome_c, "Indirizzo": indirizzo_c}])
-            st.session_state.rubrica = pd.concat([st.session_state.rubrica, nuovo_dato], ignore_index=True)
-            st.success(f"{nome_c} aggiunto correttamente!")
+        if submit and nome:
+            # Crea un nuovo record
+            nuovo_dato = pd.DataFrame([{"Nome": nome, "Indirizzo": indirizzo}])
+            # Unisci al vecchio database
+            updated_df = pd.concat([df_rubrica, nuovo_dato], ignore_index=True)
+            # Scrivi su Google Sheets
+            conn.update(spreadsheet=URL_FOGLIO, data=updated_df)
+            st.success(f"Cliente {nome} salvato su Google Sheets!")
+            st.rerun()
 
-    st.subheader("I tuoi contatti")
-    st.dataframe(st.session_state.rubrica, use_container_width=True)
+    st.subheader("I tuoi contatti salvati")
+    st.dataframe(df_rubrica, use_container_width=True)
 
-# --- TAB 2: ITINERARIO (Migliorato) ---
 with tab2:
-    st.header("Costruisci il tuo giro")
-    if not st.session_state.rubrica.empty:
-        # Qui il vantaggio: selezioni il cliente dalla rubrica!
-        cliente_scelto = st.selectbox("Seleziona Cliente dalla Rubrica", st.session_state.rubrica["Nome"])
+    st.header("Crea l'itinerario di oggi")
+    if not df_rubrica.empty:
+        scelta = st.selectbox("Seleziona cliente dalla rubrica", df_rubrica["Nome"])
+        indirizzo_sel = df_rubrica[df_rubrica["Nome"] == scelta]["Indirizzo"].values[0]
         
-        # Recupera l'indirizzo in automatico
-        info_cliente = st.session_state.rubrica[st.session_state.rubrica["Nome"] == cliente_scelto]
-        indirizzo_automatico = info_cliente["Indirizzo"].values[0]
-        
-        st.write(f"📍 **Indirizzo:** {indirizzo_automatico}")
-        # ... qui prosegue la logica per aggiungere l'orario e salvare l'itinerario ...
+        st.info(f"📍 Destinazione: {indirizzo_sel}")
+        # Qui potresti aggiungere i tasti per "Aggiungi al giro del giorno"
     else:
-        st.warning("Aggiungi prima dei clienti nella Rubrica per pianificare l'itinerario.")
-        
+        st.warning("La rubrica è vuota. Vai nel Tab 1!")
+    
