@@ -1,55 +1,107 @@
 import streamlit as st
+from streamlit_gsheets import GSheetsConnection
 import pandas as pd
 
-# Funzione per generare il link multi-tappa di Google Maps
-def genera_link_percorso(fermate):
-    # Base URL per le direzioni di Google Maps
-    base_url = "https://www.google.com/maps/dir/"
-    # Formattiamo gli indirizzi per l'URL (sostituendo spazi con + e unendo con /)
-    path = "/".join([addr.replace(' ', '+') for addr in fermate])
-    return base_url + path
+# Configurazione pagina
+st.set_page_config(page_title="Work Planner", layout="wide", page_icon="🚚")
+
+# --- CONNESSIONE A GOOGLE SHEETS ---
+# Incolla qui l'URL del tuo foglio Google
+URL_FOGLIO = "IL_TUO_URL_DI_CONDIVISIONE"
+
+try:
+    conn = st.connection("gsheets", type=GSheetsConnection)
+except Exception as e:
+    st.error("Errore di connessione a Google Sheets. Verifica l'URL.")
+
+# Funzione per leggere i dati aggiornati
+def leggi_dati():
+    return conn.read(spreadsheet=URL_FOGLIO, usecols=[0, 1]).dropna(how="all")
+
+# Caricamento iniziale della rubrica
+df_rubrica = leggi_dati()
+
+# --- HEADER ---
+st.title("📅 Organizzatore Itinerari di Lavoro")
+st.markdown("Gestisci i tuoi clienti e crea percorsi ottimizzati su Google Maps.")
+
+# --- TABS ---
+tab1, tab2 = st.tabs(["📇 Rubrica Clienti", "📍 Pianifica Itinerario"])
+
+# --- TAB 1: GESTIONE RUBRICA ---
+with tab1:
+    st.header("Gestione Anagrafica")
+    
+    with st.expander("➕ Aggiungi un nuovo cliente", expanded=False):
+        with st.form("form_cliente"):
+            nome = st.text_input("Nome Azienda / Cliente")
+            indirizzo = st.text_input("Indirizzo Completo (Via, Civico, Città)")
+            submit = st.form_submit_button("Salva in Rubrica")
+            
+            if submit:
+                if nome and indirizzo:
+                    # Crea il nuovo record
+                    nuovo_dato = pd.DataFrame([{"Nome": nome, "Indirizzo": indirizzo}])
+                    # Unisci al database esistente
+                    updated_df = pd.concat([df_rubrica, nuovo_dato], ignore_index=True)
+                    # Aggiorna Google Sheets
+                    conn.update(spreadsheet=URL_FOGLIO, data=updated_df)
+                    st.success(f"Cliente '{nome}' salvato correttamente!")
+                    st.rerun()
+                else:
+                    st.warning("Per favore, compila entrambi i campi.")
+
+    st.subheader("I tuoi contatti")
+    st.dataframe(df_rubrica, use_container_width=True, hide_index=True)
 
 # --- TAB 2: PIANIFICA ITINERARIO ---
 with tab2:
-    st.header("📍 Pianifica il giro di oggi")
+    st.header("Costruisci il percorso di oggi")
     
     if not df_rubrica.empty:
-        # Inizializziamo una lista nello stato della sessione per le tappe di oggi
+        # Inizializziamo la lista tappe nella sessione
         if 'tappe_oggi' not in st.session_state:
             st.session_state.tappe_oggi = []
 
-        col1, col2 = st.columns([2, 1])
+        col_a, col_b = st.columns([3, 1])
         
-        with col1:
-            scelta = st.selectbox("Seleziona cliente dalla rubrica", df_rubrica["Nome"])
-            indirizzo_sel = df_rubrica[df_rubrica["Nome"] == scelta]["Indirizzo"].values[0]
-            st.write(f"Indirizzo selezionato: **{indirizzo_sel}**")
+        with col_a:
+            scelta_cliente = st.selectbox("Seleziona dalla rubrica", df_rubrica["Nome"])
+            # Recupera l'indirizzo corrispondente
+            indirizzo_sel = df_rubrica[df_rubrica["Nome"] == scelta_cliente]["Indirizzo"].values[0]
+            st.info(f"📍 **Indirizzo:** {indirizzo_sel}")
             
-        with col2:
-            st.write(" ") # Spazio estetico
-            if st.button("➕ Aggiungi al giro"):
+        with col_b:
+            st.write("##") # Spaziatore
+            if st.button("➕ Aggiungi al Giro", use_container_width=True):
                 if indirizzo_sel not in st.session_state.tappe_oggi:
                     st.session_state.tappe_oggi.append(indirizzo_sel)
-                    st.success("Aggiunto!")
+                    st.rerun()
                 else:
-                    st.warning("Già presente!")
+                    st.warning("Indirizzo già presente nell'itinerario.")
 
-        # Visualizzazione delle tappe scelte
+        st.divider()
+
+        # Visualizzazione Itinerario creato
         if st.session_state.tappe_oggi:
-            st.subheader("Il tuo itinerario attuale:")
-            for i, tappa in enumerate(st.session_state.tappe_oggi):
-                st.write(f"{i+1}. {tappa}")
+            st.subheader("Tappe del giorno:")
+            for i, t in enumerate(st.session_state.tappe_oggi):
+                st.write(f"**{i+1}.** {t}")
             
-            if st.button("🗑️ Svuota tutto"):
+            if st.button("🗑️ Svuota itinerario"):
                 st.session_state.tappe_oggi = []
                 st.rerun()
+
+            # --- GENERAZIONE LINK GOOGLE MAPS ---
+            st.subheader("Esecuzione")
+            # Pulizia indirizzi per URL
+            fermate_formattate = [t.replace(' ', '+') for t in st.session_state.tappe_oggi]
+            percorso_stringa = "/".join(fermate_formattate)
+            maps_url = f"https://www.google.com/maps/dir/{percorso_stringa}"
             
-            # --- TASTO MAGICO ---
-            st.divider()
-            link_finale = genera_link_percorso(st.session_state.tappe_oggi)
-            
-            st.link_button("🗺️ APRI PERCORSO SU GOOGLE MAPS", link_finale, type="primary", use_container_width=True)
-            st.info("Nota: Google Maps supporta fino a 10 tappe per volta.")
+            st.link_button("🚀 APRI PERCORSO SU GOOGLE MAPS", maps_url, type="primary", use_container_width=True)
+        else:
+            st.write("L'itinerario è ancora vuoto. Aggiungi i clienti qui sopra.")
     else:
-        st.warning("La rubrica è vuota. Vai nel Tab 1 e aggiungi i tuoi clienti!")
-    
+        st.warning("La rubrica è vuota. Inserisci dei clienti nel primo Tab.")
+            
