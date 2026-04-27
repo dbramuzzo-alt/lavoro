@@ -1,43 +1,43 @@
 import streamlit as st
 import pandas as pd
-from datetime import datetime
 
-st.set_page_config(page_title="Il Mio Itinerario di Lavoro", layout="centered")
+st.title("💼 Gestione Lavoro: Rubrica & Itinerari")
 
-st.title("📅 Organizzatore Itinerari Giornalieri")
+# Usiamo i tab per separare Rubrica e Itinerario
+tab1, tab2 = st.tabs(["📇 Rubrica Clienti", "📅 Itinerario del Giorno"])
 
-# Inizializzazione dello stato della sessione per salvare i dati temporaneamente
-if 'itinerario' not in st.session_state:
-    st.session_state.itinerario = []
+# --- TAB 1: RUBRICA CLIENTI ---
+with tab1:
+    st.header("Aggiungi un nuovo cliente")
+    if 'rubrica' not in st.session_state:
+        st.session_state.rubrica = pd.DataFrame(columns=["Nome", "Indirizzo"])
 
-# --- Sidebar per l'inserimento dati ---
-st.sidebar.header("Aggiungi Fermata")
-cliente = st.sidebar.text_input("Nome Cliente/Sito")
-indirizzo = st.sidebar.text_input("Indirizzo")
-orario = st.sidebar.time_input("Orario previsto", datetime.now().time())
-note = st.sidebar.text_area("Note/Attività")
+    with st.form("nuovo_cliente"):
+        nome_c = st.text_input("Nome Azienda / Cliente")
+        indirizzo_c = st.text_input("Indirizzo Completo")
+        submit_c = st.form_submit_button("Salva in Rubrica")
+        
+        if submit_c and nome_c:
+            nuovo_dato = pd.DataFrame([{"Nome": nome_c, "Indirizzo": indirizzo_c}])
+            st.session_state.rubrica = pd.concat([st.session_state.rubrica, nuovo_dato], ignore_index=True)
+            st.success(f"{nome_c} aggiunto correttamente!")
 
-if st.sidebar.button("Aggiungi all'itinerario"):
-    nuova_tappa = {
-        "Orario": orario.strftime("%H:%M"),
-        "Cliente": cliente,
-        "Indirizzo": indirizzo,
-        "Note": note
-    }
-    st.session_state.itinerario.append(nuova_tappa)
-    st.sidebar.success("Aggiunto!")
+    st.subheader("I tuoi contatti")
+    st.dataframe(st.session_state.rubrica, use_container_width=True)
 
-# --- Visualizzazione Itinerario ---
-if st.session_state.itinerario:
-    df = pd.DataFrame(st.session_state.itinerario)
-    df = df.sort_values(by="Orario") # Ordina per orario
-
-    st.subheader("I tuoi impegni di oggi")
-    st.table(df)
-
-    if st.button("Svuota Itinerario"):
-        st.session_state.itinerario = []
-        st.rerun()
-else:
-    st.info("L'itinerario è vuoto. Usa la barra laterale per aggiungere appuntamenti.")
-  
+# --- TAB 2: ITINERARIO (Migliorato) ---
+with tab2:
+    st.header("Costruisci il tuo giro")
+    if not st.session_state.rubrica.empty:
+        # Qui il vantaggio: selezioni il cliente dalla rubrica!
+        cliente_scelto = st.selectbox("Seleziona Cliente dalla Rubrica", st.session_state.rubrica["Nome"])
+        
+        # Recupera l'indirizzo in automatico
+        info_cliente = st.session_state.rubrica[st.session_state.rubrica["Nome"] == cliente_scelto]
+        indirizzo_automatico = info_cliente["Indirizzo"].values[0]
+        
+        st.write(f"📍 **Indirizzo:** {indirizzo_automatico}")
+        # ... qui prosegue la logica per aggiungere l'orario e salvare l'itinerario ...
+    else:
+        st.warning("Aggiungi prima dei clienti nella Rubrica per pianificare l'itinerario.")
+        
